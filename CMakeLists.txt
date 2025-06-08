@@ -1,0 +1,26 @@
+cmake_minimum_required(VERSION 3.22)
+
+# Set the project name and language
+project(RTS2 C)
+
+# Setup compiler settings
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_C_EXTENSIONS ON)
+
+# Define the executable and its sources
+add_executable(${PROJECT_NAME})
+
+# Add sources to the executable
+target_sources(${PROJECT_NAME} PRIVATE
+    src/main.c
+)
+
+# Add include paths
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_SOURCE_DIR}/inc
+)
+
+target_compile_options(${PROJECT_NAME} PRIVATE
+    -O0
+)
