@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "stdlib.h": "c",
+        "stdio.h": "c",
+        "compare": "c",
+        "i2c_driver.h": "c"
+    }
+}

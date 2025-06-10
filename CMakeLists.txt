@@ -8,17 +8,29 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_C_EXTENSIONS ON)
 
+# Find ALSA
+find_package(ALSA REQUIRED)
+
 # Define the executable and its sources
 add_executable(${PROJECT_NAME})
 
 # Add sources to the executable
 target_sources(${PROJECT_NAME} PRIVATE
     src/main.c
+    src/i2c_driver.c
+    src/audio.c
 )
 
 # Add include paths
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/inc
+    ${ALSA_INCLUDE_DIRS}  # Add ALSA includes
+)
+
+# Link ALSA and other libs
+target_link_libraries(${PROJECT_NAME} PRIVATE
+    ${ALSA_LIBRARIES}
+    m
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE

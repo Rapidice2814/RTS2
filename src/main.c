@@ -2,6 +2,14 @@
 #include <stdlib.h>
 #include <pthread.h>
 
+#include <stdint.h>
+
+#include "i2c_driver.h"
+#include "audio.h"
+
+
+
+
 // Thread function: what each thread will run
 void* thread_function(void* arg) {
     int thread_num = *((int*)arg);
@@ -30,5 +38,17 @@ int main(void) {
     }
 
     printf("All threads finished.\n");
+
+    uint8_t address_7bit = 0;
+    uint16_t data_9bit = 0;
+
+    // WM8960_I2c_Init();
+    // WM8960_I2c_Send(address_7bit, data_9bit);
+    // WM8960_I2c_Deinit();
+
+
+    sound_processing();
+
     return 0;
 }
+
