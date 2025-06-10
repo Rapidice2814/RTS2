@@ -1,2 +1,5 @@
 #pragma once
-int sound_processing();
+
+int Sound_Init();
+int Sound_Loop();
+int Sound_Deinit();

@@ -37,17 +37,18 @@ int main(void) {
         pthread_join(threads[i], NULL);
     }
 
-    printf("All threads finished.\n");
-
-    uint8_t address_7bit = 0;
-    uint16_t data_9bit = 0;
-
-    // WM8960_I2c_Init();
-    // WM8960_I2c_Send(address_7bit, data_9bit);
-    // WM8960_I2c_Deinit();
+    // printf("All threads finished.\n");
 
 
-    sound_processing();
+    Sound_Init();
+
+    while (1) {
+       if(Sound_Loop()) break;
+    }
+
+    Sound_Deinit();
+
+    printf("Program finished.\n");
 
     return 0;
 }
