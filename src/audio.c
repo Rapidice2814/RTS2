@@ -14,12 +14,12 @@
 
 
 #define CAPTURE_DEVICE "hw:3"
-#define PLAYBACK_DEVICE "hw:0"
+#define PLAYBACK_DEVICE "hw:3"
 #define SAMPLE_RATE 48000
 #define CHANNELS 2
 #define FORMAT SND_PCM_FORMAT_S16_LE
 
-#define PERIOD_SIZE 64
+#define PERIOD_SIZE 256
 // #define PERIOD_SIZE 10000
 
 snd_pcm_t *capture_handle, *playback_handle;
@@ -87,12 +87,13 @@ int Sound_Loop(){
     } else if (retval != PERIOD_SIZE) {
         fprintf(stderr, "Short read, expected %d frames, got %d\n", PERIOD_SIZE, retval);
     } else{
+        
         // Process each sample pair (frame) individually
-        for (int i = 0; i < retval; i++) {
-            process_sample(&buffer[i * CHANNELS], &buffer[i * CHANNELS]);
-        }
+        // for (int i = 0; i < retval; i++) {
+        //     process_sample(&buffer[i * CHANNELS], &buffer[i * CHANNELS]);
+        // }
 
-        retval = snd_pcm_writei(playback_handle, buffer, PERIOD_SIZE);
+        retval = snd_pcm_writei(playback_handle, buffer, retval);
         if (retval < 0) {
             if (retval == -EPIPE) {
                 snd_pcm_prepare(playback_handle);

@@ -17,7 +17,6 @@ add_executable(${PROJECT_NAME})
 # Add sources to the executable
 target_sources(${PROJECT_NAME} PRIVATE
     src/main.c
-    src/i2c_driver.c
     src/audio.c
 )
 
@@ -34,5 +33,5 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE
-    -O0
+    -O2
 )
