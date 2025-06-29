@@ -1,0 +1,58 @@
+#include "fifo.h"
+
+#include <stdlib.h>
+#include <string.h>
+
+int fifo_init(fifo_t *fifo, int capacity, size_t element_size) {
+    fifo->capacity = capacity;
+    fifo->element_size = element_size;
+    fifo->buffer = malloc(capacity * element_size);
+    if (!fifo->buffer) return -1;
+
+    fifo->head = fifo->tail = fifo->count = 0;
+    pthread_mutex_init(&fifo->mutex, NULL);
+    pthread_cond_init(&fifo->not_full, NULL);
+    pthread_cond_init(&fifo->not_empty, NULL);
+    return 0;
+}
+
+
+int fifo_push(fifo_t *fifo, const void *item) {
+    pthread_mutex_lock(&fifo->mutex);
+    while (fifo->count == fifo->capacity) {
+        pthread_cond_wait(&fifo->not_full, &fifo->mutex);
+    }
+
+    void *dest = (char *)fifo->buffer + (fifo->tail * fifo->element_size);
+    memcpy(dest, item, fifo->element_size);
+    fifo->tail = (fifo->tail + 1) % fifo->capacity;
+    fifo->count++;
+
+    pthread_cond_signal(&fifo->not_empty);
+    pthread_mutex_unlock(&fifo->mutex);
+    return 0;
+}
+
+int fifo_pop(fifo_t *fifo, void *item) {
+    pthread_mutex_lock(&fifo->mutex);
+    while (fifo->count == 0) {
+        pthread_cond_wait(&fifo->not_empty, &fifo->mutex);
+    }
+
+    void *src = (char *)fifo->buffer + (fifo->head * fifo->element_size);
+    memcpy(item, src, fifo->element_size);
+    fifo->head = (fifo->head + 1) % fifo->capacity;
+    fifo->count--;
+
+    pthread_cond_signal(&fifo->not_full);
+    pthread_mutex_unlock(&fifo->mutex);
+    return 0;
+}
+
+
+void fifo_destroy(fifo_t *fifo) {
+    free(fifo->buffer);
+    pthread_mutex_destroy(&fifo->mutex);
+    pthread_cond_destroy(&fifo->not_full);
+    pthread_cond_destroy(&fifo->not_empty);
+}
