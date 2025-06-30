@@ -91,6 +91,50 @@ int fifo_pop_batch(fifo_t *fifo, void *dest_array, int n) {
     return n;
 }
 
+int fifo_try_push_batch(fifo_t *fifo, const void *src_array, int n) {
+    pthread_mutex_lock(&fifo->mutex);
+
+    // Check if there's enough room for all n items, return 0 if not
+    if (fifo->count + n > fifo->capacity) {
+        pthread_mutex_unlock(&fifo->mutex);
+        return 0; // Not enough space, fail immediately
+    }
+
+    for (int i = 0; i < n; ++i) {
+        const void *src = (const char *)src_array + (i * fifo->element_size);
+        void *dst = (char *)fifo->buffer + (fifo->tail * fifo->element_size);
+        memcpy(dst, src, fifo->element_size);
+        fifo->tail = (fifo->tail + 1) % fifo->capacity;
+        fifo->count++;
+    }
+
+    pthread_cond_signal(&fifo->not_empty);
+    pthread_mutex_unlock(&fifo->mutex);
+    return n;  // Number of items successfully pushed (always n here)
+}
+
+int fifo_try_pop_batch(fifo_t *fifo, void *dest_array, int n) {
+    pthread_mutex_lock(&fifo->mutex);
+
+    // Check if enough items are available, return 0 if not
+    if (fifo->count < n) {
+        pthread_mutex_unlock(&fifo->mutex);
+        return 0;  // Not enough data available, fail immediately
+    }
+
+    for (int i = 0; i < n; ++i) {
+        void *src = (char *)fifo->buffer + (fifo->head * fifo->element_size);
+        void *dst = (char *)dest_array + (i * fifo->element_size);
+        memcpy(dst, src, fifo->element_size);
+        fifo->head = (fifo->head + 1) % fifo->capacity;
+        fifo->count--;
+    }
+
+    pthread_cond_signal(&fifo->not_full);
+    pthread_mutex_unlock(&fifo->mutex);
+    return n;  // Number of items popped (always n here)
+}
+
 
 
 

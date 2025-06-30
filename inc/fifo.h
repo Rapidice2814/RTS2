@@ -23,3 +23,6 @@ int fifo_push(fifo_t *fifo, const void *item);
 int fifo_pop(fifo_t *fifo, void *item);
 int fifo_push_batch(fifo_t *fifo, const void *src_array, int n);
 int fifo_pop_batch(fifo_t *fifo, void *dest_array, int n);
+int fifo_try_push_batch(fifo_t *fifo, const void *src_array, int n);
+int fifo_try_pop_batch(fifo_t *fifo, void *dest_array, int n);
+
