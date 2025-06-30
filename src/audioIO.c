@@ -1,4 +1,4 @@
-#include "audio.h"
+#include "audioIO.h"
 
 #include <math.h> 
 #include <stdint.h>
@@ -7,6 +7,7 @@
 #include <alsa/asoundlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #include <time.h>
 
@@ -37,7 +38,8 @@ void process_sample(int16_t *in, int16_t *out, uint8_t capture_channel, uint8_t 
 int Sound_Init(){
     int retval;
     /* Capture device */
-    if ((retval = snd_pcm_open(&capture_handle, CAPTURE_DEVICE, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK)) < 0) {
+    // if ((retval = snd_pcm_open(&capture_handle, CAPTURE_DEVICE, SND_PCM_STREAM_CAPTURE, SND_PCM_NONBLOCK)) < 0) {
+    if ((retval = snd_pcm_open(&capture_handle, CAPTURE_DEVICE, SND_PCM_STREAM_CAPTURE, 0)) < 0) {
         fprintf(stderr, "Cannot open capture device: %s\n", snd_strerror(retval));
         return 1;
     }
@@ -64,7 +66,8 @@ int Sound_Init(){
 
 
 
-    if ((retval = snd_pcm_open(&playback_handle, PLAYBACK_DEVICE, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0) {
+    // if ((retval = snd_pcm_open(&playback_handle, PLAYBACK_DEVICE, SND_PCM_STREAM_PLAYBACK, SND_PCM_NONBLOCK)) < 0) {
+    if ((retval = snd_pcm_open(&playback_handle, PLAYBACK_DEVICE, SND_PCM_STREAM_PLAYBACK, 0)) < 0) {
         fprintf(stderr, "Cannot open playback device: %s\n", snd_strerror(retval));
         snd_pcm_close(capture_handle);
         return 1;
@@ -131,56 +134,24 @@ int Sound_Init(){
 
 struct timespec start, end;
 
-int16_t capture_buffer[PERIOD_SIZE * CAPTURE_CHANNELS];
-int16_t playback_buffer[PERIOD_SIZE * PLAYBACK_CHANNELS];
 
 /* Loop for the sound processing*/
 int Sound_Loop(){
-    int available_read = snd_pcm_avail(capture_handle);
-    if(available_read > PERIOD_SIZE) {
-        printf("READ available frames: %d, Out of: %d\n", available_read, BUFFER_SIZE); //should be close to 0
-    }
+    
 
-    int frames_read = snd_pcm_readi(capture_handle, capture_buffer, PERIOD_SIZE); 
-    if(frames_read < 0) {
-        if(frames_read == -EAGAIN) {
-            return 0; // No new data available
-        } else {
-            printf("Capture error: %s\n", snd_strerror(frames_read));
-            snd_pcm_prepare(capture_handle);
-        }
-    }else{
-        // printf("Read: %d\n", frames_read);
-    }
+    // clock_gettime(CLOCK_MONOTONIC, &start);
 
-    clock_gettime(CLOCK_MONOTONIC, &start);
+    // for (int i = 0; i < frames_read; i++) {
+    //     process_sample(&capture_buffer[i * CAPTURE_CHANNELS], &playback_buffer[i * PLAYBACK_CHANNELS], CAPTURE_CHANNELS, PLAYBACK_CHANNELS);
+    // }
+    // usleep(1500);
 
-    for (int i = 0; i < frames_read; i++) {
-        process_sample(&capture_buffer[i * CAPTURE_CHANNELS], &playback_buffer[i * PLAYBACK_CHANNELS], CAPTURE_CHANNELS, PLAYBACK_CHANNELS);
-    }
-    usleep(1500);
-
-    clock_gettime(CLOCK_MONOTONIC, &end);
-    double elapsed = ((end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9) * 1000000;
-    // printf("Time: %fus\n", elapsed);
+    // clock_gettime(CLOCK_MONOTONIC, &end);
+    // double elapsed = ((end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9) * 1000000;
+    // // printf("Time: %fus\n", elapsed);
 
 
-    int available_write = snd_pcm_avail(playback_handle);
-    if(available_write < PERIOD_SIZE) {
-        printf("WRITE available frames: %d, Out of: %d\n", available_write, BUFFER_SIZE); //should be close to BUFFER_SIZE
-    }
-
-    int framess_written = snd_pcm_writei(playback_handle, playback_buffer, frames_read);
-    if(framess_written < 0) {
-        if(framess_written == -EAGAIN) {
-            return 0; // Not enough space
-        } else {
-            printf("Playback error: %s\n", snd_strerror(framess_written));
-            snd_pcm_prepare(playback_handle);
-        }
-    }else{
-        // printf("Written: %d\n", framess_written);
-    } 
+     
     
     return 0;
 }
@@ -194,13 +165,93 @@ int Sound_Deinit(){
 
 static audio_io_args_t *g_audio_args = NULL;
 
+/*saves microphone to fifo*/
+void* Function_Capture(void* arg) {
+    fifo_t *fifo = (fifo_t *)arg;
+
+    int frames_read;
+    int16_t capture_buffer[PERIOD_SIZE * CAPTURE_CHANNELS];
+    int16_t ch1_buffer[PERIOD_SIZE]; 
+
+
+    while(1){
+        frames_read = snd_pcm_readi(capture_handle, capture_buffer, PERIOD_SIZE); 
+        if(frames_read < 0) {
+            if(frames_read == -EPIPE) {
+                // overrun recovery
+                printf("Capture error: %s\n", snd_strerror(frames_read));
+                snd_pcm_prepare(capture_handle);
+                continue;
+            } else {
+                printf("Capture error: %s\n", snd_strerror(frames_read));
+                snd_pcm_prepare(capture_handle);
+                continue;
+            }
+        }else{
+            // printf("Read: %d\n", frames_read);
+        }
+        for (int i = 0; i < frames_read; i++) {
+            ch1_buffer[i] = capture_buffer[i * CAPTURE_CHANNELS];  // channel 1 sample
+        }
+
+        fifo_push_batch(fifo, ch1_buffer, frames_read);
+
+    }
+    return NULL;
+}
+
+/*takes fifo and outputs it to speaker*/
+void* Function_Playback(void* arg) {
+    fifo_t *fifo = (fifo_t *)arg;
+
+    int16_t ch1_buffer[PERIOD_SIZE]; 
+    int16_t playback_buffer[PERIOD_SIZE * PLAYBACK_CHANNELS];
+
+
+    while(1){
+        fifo_pop_batch(fifo, ch1_buffer, PERIOD_SIZE);
+
+        for (int i = 0; i < PERIOD_SIZE; i++) {
+            int16_t sample = ch1_buffer[i];
+            for (int ch = 0; ch < PLAYBACK_CHANNELS; ch++) {
+                playback_buffer[i * PLAYBACK_CHANNELS + ch] = sample;
+            }
+        }
+
+
+        int framess_written = snd_pcm_writei(playback_handle, playback_buffer, PERIOD_SIZE);
+        if(framess_written < 0) {
+            if(framess_written == -EPIPE) {
+                printf("Playback error: %s\n", snd_strerror(framess_written));
+                snd_pcm_prepare(playback_handle);
+                continue; // Not enough space
+            } else {
+                printf("Playback error: %s\n", snd_strerror(framess_written));
+                snd_pcm_prepare(playback_handle);
+                continue;
+            }
+        }else{
+            // printf("Written: %d\n", framess_written);
+        }
+    }
+    return NULL;
+}
+
 void* Function_AudioIO(void* arg) {
     g_audio_args = (audio_io_args_t *)arg;
+
+    printf("FIFO cap: %p, FIFO play: %p\n", 
+            g_audio_args->capture_fifo,
+            g_audio_args->playback_fifo);
+
     Sound_Init();
 
-    while (1) {
-       if(Sound_Loop()) break;
-    }
+    pthread_t thread_capture, thread_playback;
+    pthread_create(&thread_capture, NULL, Function_Capture, g_audio_args->capture_fifo);
+    pthread_create(&thread_playback, NULL, Function_Playback, g_audio_args->playback_fifo);
+
+    pthread_join(thread_capture, NULL);
+    pthread_join(thread_playback, NULL);
 
     Sound_Deinit();
     return NULL;
@@ -208,64 +259,3 @@ void* Function_AudioIO(void* arg) {
 
 
 
-
-
-
-
-
-
-
-
-int16_t multiply_and_clip(int16_t value, int factor);
-
-// Example processing function (copy input to output)
-void process_sample(int16_t *in, int16_t *out, uint8_t capture_channel, uint8_t playback_channel) {
-    // printf("In: %d %d\n", in[0], in[1]);
-    if(capture_channel == 1 && playback_channel == 2) {
-        out[0] = multiply_and_clip(in[0], 10); // Left channel
-        out[1] = multiply_and_clip(in[0], 10); // Right channel
-        // printf("In: %d\n", in[0]);
-    } else if(capture_channel == 2 && playback_channel == 2) {
-        out[0] = in[0]; // Left channel
-        out[1] = in[1]; // Right channel
-    } else if(capture_channel == 1 && playback_channel == 1) {
-        out[0] = in[0];
-    } 
-    // printf("In: %6d %6d, Out: %6d, %6d\n", in[0], in[1], out[0], out[1]);
-}
-
-
-int16_t multiply_and_clip(int16_t value, int factor) {
-    int32_t result = (int32_t)value * factor;  // Use wider type to avoid overflow
-    
-    if (result > 32767) {
-        return 32767;
-    } else if (result < -32768) {
-        return -32768;
-    }
-    return (int16_t)result;
-}
-
-
-#define PI 3.14159265358979323846
-#define FREQUENCY 440.0f  // A4 note
-#define AMPLITUDE 3000    // 16-bit range: -32768 to 32767
-
-void sine(int16_t *in, int16_t *out, uint8_t capture_channel, uint8_t playback_channel) {
-    static double phase = 0.0;
-    double increment = 2.0 * PI * FREQUENCY / SAMPLE_RATE;
-    
-    int16_t sample = (int16_t)(sin(phase) * AMPLITUDE);
-    phase += increment;
-    if (phase >= 2.0 * PI) {
-        phase -= 2.0 * PI;
-    }
-
-    // Output sine to all configured playback channels
-    if (playback_channel == 2) {
-        out[0] = sample;  // Left
-        out[1] = sample;  // Right
-    } else if (playback_channel == 1) {
-        out[0] = sample;
-    }
-}

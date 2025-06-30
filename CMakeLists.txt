@@ -17,8 +17,9 @@ add_executable(${PROJECT_NAME})
 # Add sources to the executable
 target_sources(${PROJECT_NAME} PRIVATE
     src/main.c
-    src/audio.c
+    src/audioIO.c
     src/fifo.c
+    src/audioProcessing.c
 )
 
 # Add include paths

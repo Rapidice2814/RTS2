@@ -4,8 +4,8 @@
 
 
 typedef struct {
-    fifo_t *input_fifo;
-    fifo_t *output_fifo;
+    fifo_t *capture_fifo;
+    fifo_t *playback_fifo;
 } audio_io_args_t;
 
 void* Function_AudioIO(void* arg);
