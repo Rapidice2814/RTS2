@@ -5,6 +5,7 @@
 #include <stdint.h>
 
 #include "audio.h"
+#include "fifo.h"
 
 
 
@@ -15,6 +16,9 @@ void* thread_function(void* arg) {
     printf("Hello from thread %d!\n", thread_num);
     return NULL;
 }
+
+
+
 
 int main(void) {
     const int NUM_THREADS = 5;
@@ -36,16 +40,20 @@ int main(void) {
         pthread_join(threads[i], NULL);
     }
 
-    // printf("All threads finished.\n");
+    printf("Test threads finished.\n");
 
+    fifo_t fifo_in, fifo_out;
 
-    Sound_Init();
+    fifo_init(&fifo_in, 128, sizeof(int16_t));   // Adjust size/type as needed
+    fifo_init(&fifo_out, 128, sizeof(int16_t));
+    audio_io_args_t *audio_io_args = malloc(sizeof(audio_io_args_t));
+    audio_io_args->input_fifo = &fifo_in;
+    audio_io_args->output_fifo = &fifo_out;
 
-    while (1) {
-       if(Sound_Loop()) break;
-    }
-
-    Sound_Deinit();
+    pthread_t audioIO_thread;
+    pthread_create(&audioIO_thread, NULL, Function_AudioIO, (void *)audio_io_args);
+    pthread_join(audioIO_thread, NULL);
+    
 
     printf("Program finished.\n");
 

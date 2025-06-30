@@ -16,7 +16,7 @@
 
 
 #define CAPTURE_DEVICE "hw:4"
-#define PLAYBACK_DEVICE "hw:3"
+#define PLAYBACK_DEVICE "hw:1"
 #define CAPTURE_CHANNELS 1
 #define PLAYBACK_CHANNELS 2
 #define SAMPLE_RATE 48000
@@ -191,6 +191,20 @@ int Sound_Deinit(){
     snd_pcm_close(playback_handle);
 }
 
+
+static audio_io_args_t *g_audio_args = NULL;
+
+void* Function_AudioIO(void* arg) {
+    g_audio_args = (audio_io_args_t *)arg;
+    Sound_Init();
+
+    while (1) {
+       if(Sound_Loop()) break;
+    }
+
+    Sound_Deinit();
+    return NULL;
+}
 
 
 

@@ -1,5 +1,11 @@
 #pragma once
 
-int Sound_Init();
-int Sound_Loop();
-int Sound_Deinit();
+#include "fifo.h"
+
+
+typedef struct {
+    fifo_t *input_fifo;
+    fifo_t *output_fifo;
+} audio_io_args_t;
+
+void* Function_AudioIO(void* arg);
