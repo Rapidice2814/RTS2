@@ -44,16 +44,21 @@ int main(void) {
     // printf("Test threads finished.\n");
 
     fifo_t audio_io_fifo_capture, audio_io_fifo_playback;
+    fifo_t echo_fifo;
 
     fifo_init(&audio_io_fifo_capture, 256, sizeof(int16_t));   // Adjust size/type as needed
     fifo_init(&audio_io_fifo_playback, 256, sizeof(int16_t));
+    fifo_init(&echo_fifo, 256, sizeof(int16_t)); // Echo FIFO for audio processing
+
     audio_io_args_t *audio_io_args = malloc(sizeof(audio_io_args_t));
     audio_io_args->capture_fifo = &audio_io_fifo_capture;
     audio_io_args->playback_fifo = &audio_io_fifo_playback;
+    audio_io_args->echo_fifo = &echo_fifo;
 
     audio_processing_args_t *audio_processing_args = malloc(sizeof(audio_processing_args_t));
     audio_processing_args->in_fifo = &audio_io_fifo_capture;
     audio_processing_args->out_fifo = &audio_io_fifo_playback;
+    audio_processing_args->echo_fifo = &echo_fifo;
 
     pthread_t audio_processing_thread;
     pthread_create(&audio_processing_thread, NULL, Function_Audio_Processing, (void *)audio_processing_args);

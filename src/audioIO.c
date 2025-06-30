@@ -233,6 +233,8 @@ void* Function_Playback(void* arg) {
         }else{
             // printf("Written: %d\n", framess_written);
         }
+
+        // fifo_push_batch(g_audio_args->echo_fifo, ch1_buffer, framess_written);
     }
     return NULL;
 }

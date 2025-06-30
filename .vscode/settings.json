@@ -5,7 +5,8 @@
         "compare": "c",
         "i2c_driver.h": "c",
         "audioio.h": "c",
-        "audioprocessing.h": "c"
+        "audioprocessing.h": "c",
+        "pthread.h": "c"
     },
     "C_Cpp.default.compilerPath": "/usr/bin/gcc"
 }
