@@ -17,7 +17,7 @@
 
 
 #define CAPTURE_DEVICE "hw:4"
-#define PLAYBACK_DEVICE "hw:1"
+#define PLAYBACK_DEVICE "hw:3"
 #define CAPTURE_CHANNELS 1
 #define PLAYBACK_CHANNELS 2
 #define SAMPLE_RATE 48000
@@ -132,29 +132,6 @@ int Sound_Init(){
     return 0;
 }
 
-struct timespec start, end;
-
-
-/* Loop for the sound processing*/
-int Sound_Loop(){
-    
-
-    // clock_gettime(CLOCK_MONOTONIC, &start);
-
-    // for (int i = 0; i < frames_read; i++) {
-    //     process_sample(&capture_buffer[i * CAPTURE_CHANNELS], &playback_buffer[i * PLAYBACK_CHANNELS], CAPTURE_CHANNELS, PLAYBACK_CHANNELS);
-    // }
-    // usleep(1500);
-
-    // clock_gettime(CLOCK_MONOTONIC, &end);
-    // double elapsed = ((end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9) * 1000000;
-    // // printf("Time: %fus\n", elapsed);
-
-
-     
-    
-    return 0;
-}
 
 /* Closes ALSA*/
 int Sound_Deinit(){
@@ -163,18 +140,21 @@ int Sound_Deinit(){
 }
 
 
+static struct timespec start_capture, end_capture;
 static audio_io_args_t *g_audio_args = NULL;
 
 /*saves microphone to fifo*/
 void* Function_Capture(void* arg) {
     fifo_t *fifo = (fifo_t *)arg;
-
+    
     int frames_read;
     int16_t capture_buffer[PERIOD_SIZE * CAPTURE_CHANNELS];
     int16_t ch1_buffer[PERIOD_SIZE]; 
-
-
+    
+    
     while(1){
+        clock_gettime(CLOCK_MONOTONIC, &start_capture);
+        
         frames_read = snd_pcm_readi(capture_handle, capture_buffer, PERIOD_SIZE); 
         if(frames_read < 0) {
             if(frames_read == -EPIPE) {
@@ -193,13 +173,18 @@ void* Function_Capture(void* arg) {
         for (int i = 0; i < frames_read; i++) {
             ch1_buffer[i] = capture_buffer[i * CAPTURE_CHANNELS];  // channel 1 sample
         }
-
+        
         fifo_push_batch(fifo, ch1_buffer, frames_read);
-
+        
+        clock_gettime(CLOCK_MONOTONIC, &end_capture);
+        double elapsed = ((end_capture.tv_sec - start_capture.tv_sec) + (end_capture.tv_nsec - start_capture.tv_nsec) / 1e9) * 1000000;
+        printf("Cap Time: %fus\n", elapsed);
     }
     return NULL;
 }
 
+
+static struct timespec start_playback, end_playback;
 /*takes fifo and outputs it to speaker*/
 void* Function_Playback(void* arg) {
     fifo_t *fifo = (fifo_t *)arg;
@@ -209,6 +194,8 @@ void* Function_Playback(void* arg) {
 
 
     while(1){
+        clock_gettime(CLOCK_MONOTONIC, &start_playback);
+
         fifo_pop_batch(fifo, ch1_buffer, PERIOD_SIZE);
 
         for (int i = 0; i < PERIOD_SIZE; i++) {
@@ -235,6 +222,10 @@ void* Function_Playback(void* arg) {
         }
 
         fifo_try_push_batch(g_audio_args->echo_fifo, ch1_buffer, framess_written);
+
+        clock_gettime(CLOCK_MONOTONIC, &end_playback);
+        double elapsed = ((end_playback.tv_sec - start_playback.tv_sec) + (end_playback.tv_nsec - start_playback.tv_nsec) / 1e9) * 1000000;
+        printf("Play Time: %fus\n", elapsed);
     }
     return NULL;
 }

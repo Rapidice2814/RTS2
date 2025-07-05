@@ -6,6 +6,8 @@
 #include <speex/speex_echo.h>
 #include <speex/speex_preprocess.h>
 
+#include <time.h>
+
 #define FRAME_SIZE (48 * 2)
 #define SAMPLE_RATE 48000
 #define ECHO_TAIL_MS 100
@@ -92,56 +94,13 @@ void preprocess_deinit() {
 
 
 
-
+static struct timespec start_echo, end_echo;
 static audio_processing_args_t *audio_processing_args = NULL;
 
-// void* Function_Audio_Processing(void* arg) {
-//     audio_processing_args = (audio_processing_args_t *)arg;
-
-//     printf("FIFO in: %p, FIFO out: %p\n", 
-//            audio_processing_args->in_fifo, 
-//            audio_processing_args->out_fifo);
-
-//     // int16_t in_sample;
-//     // int16_t out_sample;
-
-//     init_audio_processing();
-
-//     int16_t in_buffer[FRAME_SIZE];
-//     int16_t out_buffer[FRAME_SIZE];
-
-//     while (1) {
-//         // fifo_pop(audio_processing_args->in_fifo, &in_sample);
-//         // out_sample = multiply_and_clip(in_sample, 10); // multiply input by 10
-//         // fifo_push(audio_processing_args->out_fifo, &out_sample);
-//         // Pop FRAME_SIZE samples from input FIFO (blocks until available)
-
-//         fifo_pop_batch(audio_processing_args->in_fifo, in_buffer, FRAME_SIZE);
-
-//         // SpeexDSP expects in_buffer in-place
-//         // Process with SpeexDSP preprocess (denoise + AGC + dereverb)
-//         speex_preprocess_run(preprocess_state, in_buffer);
-
-//         // Copy processed frame to out_buffer (could be in_buffer itself)
-//         for (int i = 0; i < FRAME_SIZE; i++) {
-//             out_buffer[i] = in_buffer[i];//multiply_and_clip(in_buffer[i], 10);;
-//         }
-
-//         // Push processed batch to output FIFO
-//         fifo_push_batch(audio_processing_args->out_fifo, out_buffer, FRAME_SIZE);
-
-
-//     }
-
-//     destroy_audio_processing();
-
-//     return NULL;
-// }
-
-void* Function_Audio_Processing(void* arg) {
+void* Function_Audio_Echo_Cancelling(void* arg) {
     audio_processing_args = (audio_processing_args_t *)arg;
 
-    printf("FIFO in: %p, FIFO out: %p\n", 
+    printf("echo cancel: FIFO in: %p, FIFO out: %p\n", 
            audio_processing_args->in_fifo, 
            audio_processing_args->out_fifo);
 
@@ -157,40 +116,76 @@ void* Function_Audio_Processing(void* arg) {
 
 
     while (1) {
-        // printf("Processing audio frames...\n");
-        // Pop input (mic) and playback (echo ref)
+        clock_gettime(CLOCK_MONOTONIC, &start_echo);
+        
         fifo_pop_batch(audio_processing_args->in_fifo, mic_frame, FRAME_SIZE);
-        for (int i = 0; i < FRAME_SIZE; i++) {
-            mic_frame[i] = multiply_and_clip(mic_frame[i], 1);;
-        }
-
-
         if (fifo_try_pop_batch(audio_processing_args->echo_fifo, echo_frame, FRAME_SIZE) == 0) {
             // Not enough data, fill echo_frame with zeros
             memset(echo_frame, 0, FRAME_SIZE * sizeof(int16_t));
         }
+        // for (int i = 0; i < FRAME_SIZE; i++) {
+        //     mic_frame[i] = multiply_and_clip(mic_frame[i], 1);;
+        // }
+
+
 
         if(1){
           speex_echo_cancellation(echo_state, mic_frame, echo_frame, processed_frame);  
         }else{
             for(int i = 0; i < FRAME_SIZE; i++) {
-                processed_frame[i] = mic_frame[i]; // For now, just copy mic input
+                processed_frame[i] = mic_frame[i]; //just copy mic
             }
         }
 
 
-        speex_preprocess_run(preprocess_state, processed_frame);
+        // speex_preprocess_run(preprocess_state, processed_frame);
 
-        printf("Processed frame: %d\n", processed_frame[0]);
-        // for (int i = 0; i < FRAME_SIZE; i++) {
-        //     processed_frame[i] = multiply_and_clip(processed_frame[i], 3);;
-        // }
+        // printf("Processed frame: %d\n", processed_frame[0]);
 
         // Push the processed frame
         fifo_push_batch(audio_processing_args->out_fifo, processed_frame, FRAME_SIZE);
+
+        clock_gettime(CLOCK_MONOTONIC, &end_echo);
+        double elapsed = ((end_echo.tv_sec - start_echo.tv_sec) + (end_echo.tv_nsec - start_echo.tv_nsec) / 1e9) * 1000000;
+        printf("Echo time: %fus\n", elapsed);
+
     }
 
     destroy_audio_processing();
 
     return NULL;
+}
+
+static struct timespec start_volume, end_volume;
+static audio_simple_node_args_t *audio_volume_leveler_args = NULL;
+void* Function_Audio_Volume_Leveler(void* arg){
+    audio_volume_leveler_args = (audio_simple_node_args_t *)arg;
+
+    printf("audio leveler: FIFO in: %p, FIFO out: %p\n", 
+           audio_volume_leveler_args->in_fifo, 
+           audio_volume_leveler_args->out_fifo);
+
+    int16_t frame[FRAME_SIZE];
+
+    while (1) {
+        clock_gettime(CLOCK_MONOTONIC, &start_volume);
+
+        fifo_pop_batch(audio_volume_leveler_args->in_fifo, frame, FRAME_SIZE);
+        
+
+        speex_preprocess_run(preprocess_state, frame);
+        // Apply volume leveler (simple example)
+        // for (int i = 0; i < FRAME_SIZE; i++) {
+        //     frame[i] = multiply_and_clip(frame[i], 1); // Adjust volume factor as needed
+        // }
+
+        fifo_push_batch(audio_volume_leveler_args->out_fifo, frame, FRAME_SIZE);
+
+        clock_gettime(CLOCK_MONOTONIC, &end_volume);
+        double elapsed = ((end_volume.tv_sec - start_volume.tv_sec) + (end_volume.tv_nsec - start_volume.tv_nsec) / 1e9) * 1000000;
+        printf("Vol time: %fus\n", elapsed);
+    }
+
+    return NULL;
+
 }

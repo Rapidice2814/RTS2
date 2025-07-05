@@ -45,10 +45,12 @@ int main(void) {
 
     fifo_t audio_io_fifo_capture, audio_io_fifo_playback;
     fifo_t echo_fifo;
+    fifo_t audio_fifo1;
 
     fifo_init(&audio_io_fifo_capture, 256, sizeof(int16_t));   // Adjust size/type as needed
     fifo_init(&audio_io_fifo_playback, 256, sizeof(int16_t));
     fifo_init(&echo_fifo, 256, sizeof(int16_t)); // Echo FIFO for audio processing
+    fifo_init(&audio_fifo1, 256, sizeof(int16_t)); // Example FIFO for audio processing
 
     audio_io_args_t *audio_io_args = malloc(sizeof(audio_io_args_t));
     audio_io_args->capture_fifo = &audio_io_fifo_capture;
@@ -57,16 +59,24 @@ int main(void) {
 
     audio_processing_args_t *audio_processing_args = malloc(sizeof(audio_processing_args_t));
     audio_processing_args->in_fifo = &audio_io_fifo_capture;
-    audio_processing_args->out_fifo = &audio_io_fifo_playback;
+    audio_processing_args->out_fifo = &audio_fifo1;
     audio_processing_args->echo_fifo = &echo_fifo;
 
+    audio_simple_node_args_t *audio_volume_leveler_args = malloc(sizeof(audio_simple_node_args_t));
+    audio_volume_leveler_args->in_fifo = &audio_fifo1; // Input FIFO for volume leveler
+    audio_volume_leveler_args->out_fifo = &audio_io_fifo_playback;
+
     pthread_t audio_processing_thread;
-    pthread_create(&audio_processing_thread, NULL, Function_Audio_Processing, (void *)audio_processing_args);
+    pthread_create(&audio_processing_thread, NULL, Function_Audio_Echo_Cancelling, (void *)audio_processing_args);
+
+    pthread_t audio_volume_thread;
+    pthread_create(&audio_processing_thread, NULL, Function_Audio_Volume_Leveler, (void *)audio_volume_leveler_args);
 
     pthread_t audioIO_thread;
     pthread_create(&audioIO_thread, NULL, Function_AudioIO, (void *)audio_io_args);
 
     pthread_join(audio_processing_thread, NULL);
+    pthread_join(audio_volume_thread, NULL);
     pthread_join(audioIO_thread, NULL);
     
 
