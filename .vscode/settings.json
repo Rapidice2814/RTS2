@@ -7,7 +7,8 @@
         "audioio.h": "c",
         "audioprocessing.h": "c",
         "pthread.h": "c",
-        "math.h": "c"
+        "math.h": "c",
+        "fifo.h": "c"
     },
     "C_Cpp.default.compilerPath": "/usr/bin/gcc"
 }

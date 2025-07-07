@@ -17,7 +17,7 @@
 
 
 #define CAPTURE_DEVICE "hw:4"
-#define PLAYBACK_DEVICE "hw:3"
+#define PLAYBACK_DEVICE "hw:1"
 #define CAPTURE_CHANNELS 1
 #define PLAYBACK_CHANNELS 2
 #define SAMPLE_RATE 48000
@@ -178,7 +178,7 @@ void* Function_Capture(void* arg) {
         
         clock_gettime(CLOCK_MONOTONIC, &end_capture);
         double elapsed = ((end_capture.tv_sec - start_capture.tv_sec) + (end_capture.tv_nsec - start_capture.tv_nsec) / 1e9) * 1000000;
-        printf("Cap Time: %fus\n", elapsed);
+        // printf("Cap Time: %fus\n", elapsed);
     }
     return NULL;
 }
@@ -225,7 +225,7 @@ void* Function_Playback(void* arg) {
 
         clock_gettime(CLOCK_MONOTONIC, &end_playback);
         double elapsed = ((end_playback.tv_sec - start_playback.tv_sec) + (end_playback.tv_nsec - start_playback.tv_nsec) / 1e9) * 1000000;
-        printf("Play Time: %fus\n", elapsed);
+        // printf("Play Time: %fus\n", elapsed);
     }
     return NULL;
 }

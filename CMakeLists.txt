@@ -15,6 +15,10 @@ find_package(ALSA REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(SPEEXDSP REQUIRED speexdsp)
 
+# Find ncurses package
+find_package(Curses REQUIRED)
+include_directories(${CURSES_INCLUDE_DIR})
+
 # Define the executable and its sources
 add_executable(${PROJECT_NAME})
 
@@ -24,6 +28,8 @@ target_sources(${PROJECT_NAME} PRIVATE
     src/audioIO.c
     src/fifo.c
     src/audioProcessing.c
+    src/echoCanceller.c
+    src/UI.c
 )
 
 # Add include paths
@@ -31,6 +37,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/inc
     ${ALSA_INCLUDE_DIRS}  # Add ALSA includes
     ${SPEEXDSP_INCLUDE_DIRS}  # SpeexDSP includes
+    ${CURSES_INCLUDE_DIR}      # ncurses includes
 )
 
 # Link ALSA and other libs
@@ -39,6 +46,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     ${SPEEXDSP_LIBRARIES}
     m
     pthread
+    ${CURSES_LIBRARIES}        # Link ncurses
 )
 
 target_compile_options(${PROJECT_NAME} PRIVATE

@@ -2,17 +2,24 @@
 #include <stdio.h>
 #include "utils.h"
 #include <string.h>
+#include <unistd.h>
+#include <ncurses.h>
+#include <stdbool.h>
 
 #include <speex/speex_echo.h>
 #include <speex/speex_preprocess.h>
 
 #include <time.h>
 
+#include "echoCanceller.h"
+
+
 #define FRAME_SIZE (48 * 2)
 #define SAMPLE_RATE 48000
 #define ECHO_TAIL_MS 100
 
 SpeexEchoState *echo_state = NULL;
+MyEchoState* my_echo_state = NULL;
 static SpeexPreprocessState *preprocess_state = NULL;
 
 
@@ -20,7 +27,9 @@ void init_audio_processing() {
     int sample_rate = SAMPLE_RATE;
     int echo_tail = (SAMPLE_RATE * ECHO_TAIL_MS) / 1000; // e.g., 1600 samples for 100ms tail
 
+
     // Create echo canceller
+    my_echo_state = my_echo_state_init(FRAME_SIZE, echo_tail);
     echo_state = speex_echo_state_init(FRAME_SIZE, echo_tail);
     if (!echo_state) {
         fprintf(stderr, "Failed to initialize echo canceller\n");
@@ -96,9 +105,11 @@ void preprocess_deinit() {
 
 static struct timespec start_echo, end_echo;
 static audio_processing_args_t *audio_processing_args = NULL;
+pthread_mutex_t echo_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void* Function_Audio_Echo_Cancelling(void* arg) {
     audio_processing_args = (audio_processing_args_t *)arg;
+
 
     printf("echo cancel: FIFO in: %p, FIFO out: %p\n", 
            audio_processing_args->in_fifo, 
@@ -123,14 +134,17 @@ void* Function_Audio_Echo_Cancelling(void* arg) {
             // Not enough data, fill echo_frame with zeros
             memset(echo_frame, 0, FRAME_SIZE * sizeof(int16_t));
         }
-        // for (int i = 0; i < FRAME_SIZE; i++) {
-        //     mic_frame[i] = multiply_and_clip(mic_frame[i], 1);;
-        // }
 
 
+        pthread_mutex_lock(&audio_processing_args->ui_state->lock);
+        bool echo_enabled = audio_processing_args->ui_state->echo;
+        pthread_mutex_unlock(&audio_processing_args->ui_state->lock);
 
-        if(1){
-          speex_echo_cancellation(echo_state, mic_frame, echo_frame, processed_frame);  
+        if(echo_enabled){
+            pthread_mutex_lock(&echo_mutex);
+            speex_echo_cancellation(echo_state, mic_frame, echo_frame, processed_frame); 
+            pthread_mutex_unlock(&echo_mutex);
+        //   my_echo_cancellation(my_echo_state, mic_frame, echo_frame, processed_frame); 
         }else{
             for(int i = 0; i < FRAME_SIZE; i++) {
                 processed_frame[i] = mic_frame[i]; //just copy mic
@@ -147,7 +161,7 @@ void* Function_Audio_Echo_Cancelling(void* arg) {
 
         clock_gettime(CLOCK_MONOTONIC, &end_echo);
         double elapsed = ((end_echo.tv_sec - start_echo.tv_sec) + (end_echo.tv_nsec - start_echo.tv_nsec) / 1e9) * 1000000;
-        printf("Echo time: %fus\n", elapsed);
+        // printf("Echo time: %fus\n", elapsed);
 
     }
 
@@ -158,6 +172,9 @@ void* Function_Audio_Echo_Cancelling(void* arg) {
 
 static struct timespec start_volume, end_volume;
 static audio_simple_node_args_t *audio_volume_leveler_args = NULL;
+pthread_mutex_t preprocess_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+
 void* Function_Audio_Volume_Leveler(void* arg){
     audio_volume_leveler_args = (audio_simple_node_args_t *)arg;
 
@@ -172,8 +189,9 @@ void* Function_Audio_Volume_Leveler(void* arg){
 
         fifo_pop_batch(audio_volume_leveler_args->in_fifo, frame, FRAME_SIZE);
         
-
+        pthread_mutex_lock(&preprocess_mutex);
         speex_preprocess_run(preprocess_state, frame);
+        pthread_mutex_unlock(&preprocess_mutex);
         // Apply volume leveler (simple example)
         // for (int i = 0; i < FRAME_SIZE; i++) {
         //     frame[i] = multiply_and_clip(frame[i], 1); // Adjust volume factor as needed
@@ -183,9 +201,39 @@ void* Function_Audio_Volume_Leveler(void* arg){
 
         clock_gettime(CLOCK_MONOTONIC, &end_volume);
         double elapsed = ((end_volume.tv_sec - start_volume.tv_sec) + (end_volume.tv_nsec - start_volume.tv_nsec) / 1e9) * 1000000;
-        printf("Vol time: %fus\n", elapsed);
+        // printf("Vol time: %fus\n", elapsed);
     }
 
     return NULL;
 
+}
+
+void* AudioSettings(void* arg) {
+    UIState* state = (UIState*)arg;
+    UIState prev_state = *state;
+
+    while (1) {
+        if (memcmp(&prev_state, state, sizeof(UIState)) != 0) {
+
+
+            pthread_mutex_lock(&state->lock);
+            int denoise  = state->denoise ? 1 : 0;
+            int agc      = state->agc ? 1 : 0;
+            int dereverb = state->dereverb ? 1 : 0;
+            prev_state = *state;
+            pthread_mutex_unlock(&state->lock);
+            float agc_level = 32766;
+            
+            pthread_mutex_lock(&preprocess_mutex);
+            speex_preprocess_ctl(preprocess_state, SPEEX_PREPROCESS_SET_DENOISE, &denoise);
+            speex_preprocess_ctl(preprocess_state, SPEEX_PREPROCESS_SET_AGC, &agc);
+            speex_preprocess_ctl(preprocess_state, SPEEX_PREPROCESS_SET_DEREVERB, &dereverb);
+            speex_preprocess_ctl(preprocess_state, SPEEX_PREPROCESS_SET_AGC_LEVEL, &agc_level);
+            pthread_mutex_unlock(&preprocess_mutex);
+            
+            prev_state = *state;
+        }
+        usleep(100000);
+    }
+    return NULL;
 }
