@@ -8,7 +8,8 @@
         "audioprocessing.h": "c",
         "pthread.h": "c",
         "math.h": "c",
-        "fifo.h": "c"
+        "fifo.h": "c",
+        "ncurses.h": "c"
     },
     "C_Cpp.default.compilerPath": "/usr/bin/gcc"
 }

@@ -8,6 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
+#include "UI.h"
 
 #include <time.h>
 
@@ -178,7 +179,11 @@ void* Function_Capture(void* arg) {
         
         clock_gettime(CLOCK_MONOTONIC, &end_capture);
         double elapsed = ((end_capture.tv_sec - start_capture.tv_sec) + (end_capture.tv_nsec - start_capture.tv_nsec) / 1e9) * 1000000;
-        // printf("Cap Time: %fus\n", elapsed);
+        static double max_elapsed = 0;
+        if (elapsed > max_elapsed) {
+            max_elapsed = elapsed;
+        }
+        // log_message("Cap Time: %.2fus (Max: %.2fus)", elapsed, max_elapsed);
     }
     return NULL;
 }
@@ -225,7 +230,11 @@ void* Function_Playback(void* arg) {
 
         clock_gettime(CLOCK_MONOTONIC, &end_playback);
         double elapsed = ((end_playback.tv_sec - start_playback.tv_sec) + (end_playback.tv_nsec - start_playback.tv_nsec) / 1e9) * 1000000;
-        // printf("Play Time: %fus\n", elapsed);
+        static double max_elapsed = 0;
+        if (elapsed > max_elapsed) {
+            max_elapsed = elapsed;
+        }
+        // log_message("Play Time: %.2fus (Max: %.2fus)", elapsed, max_elapsed);
     }
     return NULL;
 }

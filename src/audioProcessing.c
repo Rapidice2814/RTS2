@@ -127,7 +127,7 @@ void* Function_Audio_Echo_Cancelling(void* arg) {
 
 
     while (1) {
-        clock_gettime(CLOCK_MONOTONIC, &start_echo);
+        // clock_gettime(CLOCK_MONOTONIC, &start_echo);
         
         fifo_pop_batch(audio_processing_args->in_fifo, mic_frame, FRAME_SIZE);
         if (fifo_try_pop_batch(audio_processing_args->echo_fifo, echo_frame, FRAME_SIZE) == 0) {
@@ -142,7 +142,9 @@ void* Function_Audio_Echo_Cancelling(void* arg) {
 
         if(echo_enabled){
             pthread_mutex_lock(&echo_mutex);
+            clock_gettime(CLOCK_MONOTONIC, &start_echo);
             speex_echo_cancellation(echo_state, mic_frame, echo_frame, processed_frame); 
+            clock_gettime(CLOCK_MONOTONIC, &end_echo);
             pthread_mutex_unlock(&echo_mutex);
         //   my_echo_cancellation(my_echo_state, mic_frame, echo_frame, processed_frame); 
         }else{
@@ -159,9 +161,13 @@ void* Function_Audio_Echo_Cancelling(void* arg) {
         // Push the processed frame
         fifo_push_batch(audio_processing_args->out_fifo, processed_frame, FRAME_SIZE);
 
-        clock_gettime(CLOCK_MONOTONIC, &end_echo);
+        // clock_gettime(CLOCK_MONOTONIC, &end_echo);
         double elapsed = ((end_echo.tv_sec - start_echo.tv_sec) + (end_echo.tv_nsec - start_echo.tv_nsec) / 1e9) * 1000000;
-        // printf("Echo time: %fus\n", elapsed);
+        static double max_elapsed = 0;
+        if (elapsed > max_elapsed && elapsed < 100000) { // Avoid unrealistic values
+            max_elapsed = elapsed;
+        }
+        // log_message("Echo Time: %.2fus (Max: %.2fus)", elapsed, max_elapsed);
 
     }
 
@@ -185,12 +191,14 @@ void* Function_Audio_Volume_Leveler(void* arg){
     int16_t frame[FRAME_SIZE];
 
     while (1) {
-        clock_gettime(CLOCK_MONOTONIC, &start_volume);
+        // clock_gettime(CLOCK_MONOTONIC, &start_volume);
 
         fifo_pop_batch(audio_volume_leveler_args->in_fifo, frame, FRAME_SIZE);
         
         pthread_mutex_lock(&preprocess_mutex);
+        clock_gettime(CLOCK_MONOTONIC, &start_volume);
         speex_preprocess_run(preprocess_state, frame);
+        clock_gettime(CLOCK_MONOTONIC, &end_volume);
         pthread_mutex_unlock(&preprocess_mutex);
         // Apply volume leveler (simple example)
         // for (int i = 0; i < FRAME_SIZE; i++) {
@@ -199,9 +207,13 @@ void* Function_Audio_Volume_Leveler(void* arg){
 
         fifo_push_batch(audio_volume_leveler_args->out_fifo, frame, FRAME_SIZE);
 
-        clock_gettime(CLOCK_MONOTONIC, &end_volume);
+        // clock_gettime(CLOCK_MONOTONIC, &end_volume);
         double elapsed = ((end_volume.tv_sec - start_volume.tv_sec) + (end_volume.tv_nsec - start_volume.tv_nsec) / 1e9) * 1000000;
-        // printf("Vol time: %fus\n", elapsed);
+        static double max_elapsed = 0;
+        if (elapsed > max_elapsed && elapsed < 100000) { // Avoid unrealistic values
+            max_elapsed = elapsed;
+        }
+        // log_message("Vol Time: %.2fus (Max: %.2fus)", elapsed, max_elapsed);
     }
 
     return NULL;
