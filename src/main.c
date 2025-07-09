@@ -45,7 +45,8 @@ int main(void) {
         .denoise = true,
         .agc = true,
         .dereverb = false,
-        .echo = true
+        .echo = true,
+        .volume = 0.5f
     };
 
     audio_processing_args_t *audio_processing_args = malloc(sizeof(audio_processing_args_t));

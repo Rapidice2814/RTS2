@@ -18,7 +18,7 @@
 
 
 #define CAPTURE_DEVICE "hw:4"
-#define PLAYBACK_DEVICE "hw:1"
+#define PLAYBACK_DEVICE "hw:3"
 #define CAPTURE_CHANNELS 1
 #define PLAYBACK_CHANNELS 2
 #define SAMPLE_RATE 48000

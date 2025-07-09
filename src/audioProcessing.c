@@ -167,7 +167,7 @@ void* Function_Audio_Echo_Cancelling(void* arg) {
         if (elapsed > max_elapsed && elapsed < 100000) { // Avoid unrealistic values
             max_elapsed = elapsed;
         }
-        // log_message("Echo Time: %.2fus (Max: %.2fus)", elapsed, max_elapsed);
+        log_message("Echo Time: %.2fus (Max: %.2fus), Max time per sample: %.2fus", elapsed, max_elapsed, (max_elapsed / FRAME_SIZE));
 
     }
 
@@ -233,8 +233,9 @@ void* AudioSettings(void* arg) {
             int agc      = state->agc ? 1 : 0;
             int dereverb = state->dereverb ? 1 : 0;
             prev_state = *state;
+            float agc_level = state->volume * 32766;
             pthread_mutex_unlock(&state->lock);
-            float agc_level = 32766;
+            
             
             pthread_mutex_lock(&preprocess_mutex);
             speex_preprocess_ctl(preprocess_state, SPEEX_PREPROCESS_SET_DENOISE, &denoise);

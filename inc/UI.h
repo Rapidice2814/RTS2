@@ -9,6 +9,7 @@ typedef struct {
     bool agc;
     bool dereverb;
     bool echo;
+    float volume;
     pthread_mutex_t lock;
 } UIState;
 
