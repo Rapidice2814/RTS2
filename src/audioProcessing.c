@@ -14,7 +14,8 @@
 #include "echoCanceller.h"
 
 
-#define FRAME_SIZE (48 * 2)
+#define ECHO_FRAME_SIZE (48 * 2)
+#define VOL_FRAME_SIZE (48 * 2)
 #define SAMPLE_RATE 48000
 #define ECHO_TAIL_MS 100
 
@@ -29,8 +30,8 @@ void init_audio_processing() {
 
 
     // Create echo canceller
-    my_echo_state = my_echo_state_init(FRAME_SIZE, echo_tail);
-    echo_state = speex_echo_state_init(FRAME_SIZE, echo_tail);
+    // my_echo_state = my_echo_state_init(FRAME_SIZE, echo_tail);
+    echo_state = speex_echo_state_init(ECHO_FRAME_SIZE, echo_tail);
     if (!echo_state) {
         fprintf(stderr, "Failed to initialize echo canceller\n");
         return;
@@ -38,7 +39,7 @@ void init_audio_processing() {
     speex_echo_ctl(echo_state, SPEEX_ECHO_SET_SAMPLING_RATE, &sample_rate);
 
     // Create preprocessor
-    preprocess_state = speex_preprocess_state_init(FRAME_SIZE, sample_rate);
+    preprocess_state = speex_preprocess_state_init(VOL_FRAME_SIZE, sample_rate);
     if (!preprocess_state) {
         fprintf(stderr, "Failed to initialize preprocessor\n");
         speex_echo_state_destroy(echo_state);
@@ -76,7 +77,7 @@ void destroy_audio_processing() {
 
 
 void preprocess_init() {
-    preprocess_state = speex_preprocess_state_init(FRAME_SIZE, SAMPLE_RATE);
+    preprocess_state = speex_preprocess_state_init(VOL_FRAME_SIZE, SAMPLE_RATE);
 
     int denoise = 1;
     int agc = 1;
@@ -118,21 +119,21 @@ void* Function_Audio_Echo_Cancelling(void* arg) {
 
     init_audio_processing();
 
-    int16_t mic_frame[FRAME_SIZE];      // Captured microphone input
-    int16_t echo_frame[FRAME_SIZE] = {0};     // Playback signal (reference)
-    int16_t processed_frame[FRAME_SIZE];
+    int16_t mic_frame[ECHO_FRAME_SIZE];      // Captured microphone input
+    int16_t echo_frame[ECHO_FRAME_SIZE] = {0};     // Playback signal (reference)
+    int16_t processed_frame[ECHO_FRAME_SIZE];
 
-    int16_t zero_buffer[FRAME_SIZE] = {0};  // initializes all to 0
-    fifo_push_batch(audio_processing_args->echo_fifo, zero_buffer, FRAME_SIZE);
+    int16_t zero_buffer[ECHO_FRAME_SIZE] = {0};  // initializes all to 0
+    fifo_push_batch(audio_processing_args->echo_fifo, zero_buffer, ECHO_FRAME_SIZE);
 
 
     while (1) {
         // clock_gettime(CLOCK_MONOTONIC, &start_echo);
         
-        fifo_pop_batch(audio_processing_args->in_fifo, mic_frame, FRAME_SIZE);
-        if (fifo_try_pop_batch(audio_processing_args->echo_fifo, echo_frame, FRAME_SIZE) == 0) {
+        fifo_pop_batch(audio_processing_args->in_fifo, mic_frame, ECHO_FRAME_SIZE);
+        if (fifo_try_pop_batch(audio_processing_args->echo_fifo, echo_frame, ECHO_FRAME_SIZE) == 0) {
             // Not enough data, fill echo_frame with zeros
-            memset(echo_frame, 0, FRAME_SIZE * sizeof(int16_t));
+            memset(echo_frame, 0, ECHO_FRAME_SIZE * sizeof(int16_t));
         }
 
 
@@ -148,7 +149,7 @@ void* Function_Audio_Echo_Cancelling(void* arg) {
             pthread_mutex_unlock(&echo_mutex);
         //   my_echo_cancellation(my_echo_state, mic_frame, echo_frame, processed_frame); 
         }else{
-            for(int i = 0; i < FRAME_SIZE; i++) {
+            for(int i = 0; i < ECHO_FRAME_SIZE; i++) {
                 processed_frame[i] = mic_frame[i]; //just copy mic
             }
         }
@@ -159,7 +160,7 @@ void* Function_Audio_Echo_Cancelling(void* arg) {
         // printf("Processed frame: %d\n", processed_frame[0]);
 
         // Push the processed frame
-        fifo_push_batch(audio_processing_args->out_fifo, processed_frame, FRAME_SIZE);
+        fifo_push_batch(audio_processing_args->out_fifo, processed_frame, ECHO_FRAME_SIZE);
 
         // clock_gettime(CLOCK_MONOTONIC, &end_echo);
         double elapsed = ((end_echo.tv_sec - start_echo.tv_sec) + (end_echo.tv_nsec - start_echo.tv_nsec) / 1e9) * 1000000;
@@ -167,7 +168,7 @@ void* Function_Audio_Echo_Cancelling(void* arg) {
         if (elapsed > max_elapsed && elapsed < 100000) { // Avoid unrealistic values
             max_elapsed = elapsed;
         }
-        log_message("Echo Time: %.2fus (Max: %.2fus), Max time per sample: %.2fus", elapsed, max_elapsed, (max_elapsed / FRAME_SIZE));
+        // log_message("Echo Time: %.2fus (Max: %.2fus), Max time per sample: %.2fus", elapsed, max_elapsed, (max_elapsed / ECHO_FRAME_SIZE));
 
     }
 
@@ -188,12 +189,12 @@ void* Function_Audio_Volume_Leveler(void* arg){
            audio_volume_leveler_args->in_fifo, 
            audio_volume_leveler_args->out_fifo);
 
-    int16_t frame[FRAME_SIZE];
+    int16_t frame[VOL_FRAME_SIZE];
 
     while (1) {
         // clock_gettime(CLOCK_MONOTONIC, &start_volume);
 
-        fifo_pop_batch(audio_volume_leveler_args->in_fifo, frame, FRAME_SIZE);
+        fifo_pop_batch(audio_volume_leveler_args->in_fifo, frame, VOL_FRAME_SIZE);
         
         pthread_mutex_lock(&preprocess_mutex);
         clock_gettime(CLOCK_MONOTONIC, &start_volume);
@@ -205,7 +206,7 @@ void* Function_Audio_Volume_Leveler(void* arg){
         //     frame[i] = multiply_and_clip(frame[i], 1); // Adjust volume factor as needed
         // }
 
-        fifo_push_batch(audio_volume_leveler_args->out_fifo, frame, FRAME_SIZE);
+        fifo_push_batch(audio_volume_leveler_args->out_fifo, frame, VOL_FRAME_SIZE);
 
         // clock_gettime(CLOCK_MONOTONIC, &end_volume);
         double elapsed = ((end_volume.tv_sec - start_volume.tv_sec) + (end_volume.tv_nsec - start_volume.tv_nsec) / 1e9) * 1000000;
@@ -213,7 +214,7 @@ void* Function_Audio_Volume_Leveler(void* arg){
         if (elapsed > max_elapsed && elapsed < 100000) { // Avoid unrealistic values
             max_elapsed = elapsed;
         }
-        // log_message("Vol Time: %.2fus (Max: %.2fus)", elapsed, max_elapsed);
+        // log_message("Vol Time: %.2fus (Max: %.2fus), Max time per sample: %.2fus", elapsed, max_elapsed, (max_elapsed / VOL_FRAME_SIZE));
     }
 
     return NULL;

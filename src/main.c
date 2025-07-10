@@ -30,10 +30,10 @@ int main(void) {
     fifo_t echo_fifo;
     fifo_t audio_fifo1;
 
-    fifo_init(&audio_io_fifo_capture, 256, sizeof(int16_t));   // Adjust size/type as needed
-    fifo_init(&audio_io_fifo_playback, 256, sizeof(int16_t));
-    fifo_init(&echo_fifo, 256, sizeof(int16_t)); // Echo FIFO for audio processing
-    fifo_init(&audio_fifo1, 256, sizeof(int16_t)); // Example FIFO for audio processing
+    fifo_init(&audio_io_fifo_capture, (96*2), sizeof(int16_t)); //delta 1
+    fifo_init(&audio_io_fifo_playback, (96*2), sizeof(int16_t)); //delta 3
+    fifo_init(&echo_fifo, (96*3), sizeof(int16_t)); //delta 4
+    fifo_init(&audio_fifo1, (96*2), sizeof(int16_t)); //delta 2
 
     audio_io_args_t *audio_io_args = malloc(sizeof(audio_io_args_t));
     audio_io_args->capture_fifo = &audio_io_fifo_capture;
